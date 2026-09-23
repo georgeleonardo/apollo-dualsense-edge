@@ -1,0 +1,112 @@
+name: Validate Windows Edge backend
+
+on:
+  push:
+    branches: [ci/windows-dualsense-edge]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-edge-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  APOLLO_SOURCE_REF: da8867b5a2f1a228d34f9afb8adac7cc9c41e779
+  BUILD_VERSION: 0.4.7-edge-pr.1
+  BRANCH: feature/windows-dualsense-edge
+  CLONE_URL: https://github.com/georgeleonardo/apollo-dualsense-edge
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  DOTNET_NOLOGO: 1
+
+jobs:
+  windows:
+    name: Windows x64 (Edge ${{ matrix.edge }})
+    runs-on: windows-2022
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        edge: ["ON", "OFF"]
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: da8867b5a2f1a228d34f9afb8adac7cc9c41e779
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        if: matrix.edge == 'ON'
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/setup-python@v5
+        if: matrix.edge == 'ON'
+        with:
+          python-version: '3.12'
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          path-type: inherit
+          install: >-
+            git
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-boost
+            mingw-w64-ucrt-x86_64-cppwinrt
+            mingw-w64-ucrt-x86_64-curl-winssl
+            mingw-w64-ucrt-x86_64-MinHook
+            mingw-w64-ucrt-x86_64-miniupnpc
+            mingw-w64-ucrt-x86_64-onevpl
+            mingw-w64-ucrt-x86_64-openssl
+            mingw-w64-ucrt-x86_64-opus
+            mingw-w64-ucrt-x86_64-nlohmann-json
+            mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-ripgrep
+      - name: Fetch the Windows source dependencies
+        run: |
+          git submodule update --init --recursive --depth 1 \
+            third-party/build-deps third-party/libdisplaydevice \
+            third-party/nanors third-party/nv-codec-headers \
+            third-party/nvapi-open-source-sdk third-party/Simple-Web-Server \
+            third-party/tray third-party/ViGEmClient third-party/moonlight-common-c
+      - name: Configure
+        run: |
+          export COMMIT="$APOLLO_SOURCE_REF"
+          cmake -S . -B cmake-build-edge -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release -DBUILD_DOCS=OFF -DBUILD_TESTS=OFF \
+            -DSUNSHINE_ENABLE_DUALSENSE_EDGE=${{ matrix.edge }}
+      - name: Build native targets
+        run: |
+          cmake --build cmake-build-edge --target sunshine sunshinesvc --parallel 2
+      - name: Build the probe and run managed report tests
+        if: matrix.edge == 'ON'
+        run: |
+          cmake --build cmake-build-edge --target dualsense-edge-probe dualsense-edge-tests --parallel 2
+      - name: Check the disabled build has no managed dependency
+        if: matrix.edge == 'OFF'
+        run: |
+          test ! -d cmake-build-edge/controller
+          if rg '^DOTNET_EXECUTABLE:' cmake-build-edge/CMakeCache.txt; then
+            exit 1
+          fi
+      - name: Install the application component
+        run: |
+          cmake --install cmake-build-edge --prefix staging --component application
+          if [ '${{ matrix.edge }}' = 'ON' ]; then
+            test -f staging/controller/Apollo.ControllerHost.dll
+            test -f staging/controller/HIDMaestro.Core.dll
+            test -f staging/controller/runtime/host/fxr/10.0.9/hostfxr.dll
+            cp cmake-build-edge/dualsense-edge-probe.exe staging/
+          else
+            test ! -d staging/controller
+          fi
+          printf '%s\n' "$APOLLO_SOURCE_REF" > staging/source-commit.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: apollo-windows-edge-${{ matrix.edge }}
+          path: staging
+          retention-days: 14
