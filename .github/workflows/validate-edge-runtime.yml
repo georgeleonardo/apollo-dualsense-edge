@@ -1,0 +1,60 @@
+name: Validate Edge without the USB/IP driver
+
+on:
+  push:
+    branches: [ci/edge-runtime-validation]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  missing-driver:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          artifact-ids: 10778370736
+          merge-multiple: true
+          run-id: 35922816811
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: candidate
+      - name: Load the private runtime and reject the missing transport
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $false
+          $sourceCommit = (Get-Content -Raw candidate/source-commit.txt).Trim()
+          if ($sourceCommit -cne 'ad47300109f70f483e8acbb43f2d5415d5aa5eb1') {
+            throw 'Unexpected candidate source'
+          }
+          $probeHash = (Get-FileHash candidate/dualsense-edge-probe.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($probeHash -cne '61e4b1fb82da9207f8d4056f4e725bd03be738fa0182552d8eff5b60eb118c51') {
+            throw 'Unexpected native probe'
+          }
+          $before = @(Get-CimInstance Win32_SystemDriver | Where-Object { $_.Name -like 'usbip2_*' })
+          if ($before.Count) { throw 'This check requires a runner without usbip-win2' }
+          $probeLog = & ./candidate/dualsense-edge-probe.exe 2>&1 | Out-String
+          $probeExit = $LASTEXITCODE
+          Write-Output $probeLog
+          if ($probeExit -ne 1) { throw "Expected the missing-driver failure; got exit $probeExit" }
+          if ($probeLog -notmatch 'DualSense Edge backend loaded inside Apollo' -or
+              $probeLog -notmatch 'Install and start the signed usbip-win2 driver') {
+            throw 'The native loader did not reach the expected driver prerequisite check'
+          }
+          $after = @(Get-CimInstance Win32_SystemDriver | Where-Object { $_.Name -like 'usbip2_*' })
+          if ($after.Count) { throw 'The probe installed a USB/IP driver' }
+          [ordered]@{
+            source_commit = $sourceCommit
+            probe_sha256 = $probeHash
+            native_runtime_loaded = $true
+            missing_driver_rejected = $true
+            driver_count_before = $before.Count
+            driver_count_after = $after.Count
+          } | ConvertTo-Json | Set-Content -Encoding utf8 no-driver-evidence.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: edge-missing-driver-evidence
+          path: no-driver-evidence.json
+          retention-days: 14
