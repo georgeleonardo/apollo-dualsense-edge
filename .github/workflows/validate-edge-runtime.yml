@@ -15,9 +15,9 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          artifact-ids: 10778370736
+          artifact-ids: 10779774714
           merge-multiple: true
-          run-id: 35922816811
+          run-id: 35928378399
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path: candidate
       - name: Load the private runtime and reject the missing transport
@@ -26,11 +26,11 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $PSNativeCommandUseErrorActionPreference = $false
           $sourceCommit = [IO.File]::ReadAllText((Join-Path $PWD 'candidate/source-commit.txt')).Trim()
-          if ($sourceCommit -cne 'ad47300109f70f483e8acbb43f2d5415d5aa5eb1') {
+          if ($sourceCommit -cne '03e056cabddf96d64b63f8ed171e6b9bb40e88f9') {
             throw 'Unexpected candidate source'
           }
           $probeHash = (Get-FileHash candidate/dualsense-edge-probe.exe -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($probeHash -cne '61e4b1fb82da9207f8d4056f4e725bd03be738fa0182552d8eff5b60eb118c51') {
+          if ($probeHash -cne '9327dd27ccbcbe5455302f8a5c92c66bfb3b29f0566d51e0e40e5417d194c87c') {
             throw 'Unexpected native probe'
           }
           $before = @(Get-CimInstance Win32_SystemDriver | Where-Object { $_.Name -like 'usbip2_*' })
