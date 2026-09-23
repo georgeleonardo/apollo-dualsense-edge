@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  APOLLO_SOURCE_REF: cb5b5870ca9171a330c175962371ad29745d39cc
+  APOLLO_SOURCE_REF: ad47300109f70f483e8acbb43f2d5415d5aa5eb1
   BUILD_VERSION: 0.4.7-edge-pr.1
   BRANCH: feature/windows-dualsense-edge
   CLONE_URL: https://github.com/georgeleonardo/apollo-dualsense-edge
@@ -35,7 +35,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: cb5b5870ca9171a330c175962371ad29745d39cc
+          ref: ad47300109f70f483e8acbb43f2d5415d5aa5eb1
           persist-credentials: false
       - uses: actions/setup-dotnet@v4
         if: matrix.edge == 'ON'
@@ -79,13 +79,23 @@ jobs:
           cmake -S . -B cmake-build-edge -G Ninja \
             -DCMAKE_BUILD_TYPE=Release -DBUILD_DOCS=OFF -DBUILD_TESTS=OFF \
             -DSUNSHINE_ENABLE_DUALSENSE_EDGE=${{ matrix.edge }}
-      - name: Build native targets
-        run: |
-          cmake --build cmake-build-edge --target sunshine sunshinesvc --parallel 2
       - name: Build the probe and run managed report tests
         if: matrix.edge == 'ON'
         run: |
           cmake --build cmake-build-edge --target dualsense-edge-probe dualsense-edge-tests --parallel 2
+          printf '%s\n' "$APOLLO_SOURCE_REF" > cmake-build-edge/source-commit.txt
+      - uses: actions/upload-artifact@v4
+        if: matrix.edge == 'ON'
+        with:
+          name: apollo-edge-probe-win-x64
+          path: |
+            cmake-build-edge/dualsense-edge-probe.exe
+            cmake-build-edge/controller
+            cmake-build-edge/source-commit.txt
+          retention-days: 14
+      - name: Build native targets
+        run: |
+          cmake --build cmake-build-edge --target sunshine sunshinesvc --parallel 2
       - name: Check the disabled build has no managed dependency
         if: matrix.edge == 'OFF'
         run: |
