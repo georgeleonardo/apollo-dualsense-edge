@@ -300,7 +300,7 @@ namespace platf {
       return std::filesystem::is_regular_file(directory / L"Apollo.ControllerHost.dll") &&
              std::filesystem::is_regular_file(directory / L"Apollo.ControllerHost.runtimeconfig.json") &&
              std::filesystem::is_regular_file(directory / L"nethost.dll") &&
-             std::filesystem::is_regular_file(directory / L"Profiles" / L"dualsense-edge-composite.json") &&
+             std::filesystem::is_regular_file(directory / L"Profiles" / L"dualsense-edge-usb.json") &&
              std::filesystem::is_regular_file(directory / L"runtime" / L"dotnet.exe");
     } catch (const std::exception &) {
       return false;

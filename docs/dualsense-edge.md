@@ -54,6 +54,10 @@ implemented. This backend reconstructs a virtual controller; it is not full USB
 passthrough. The host selection is explicit because controller arrival messages
 do not identify the client's exact physical VID/PID.
 
+The virtual USB device exposes only the gamepad HID interface. It does not
+create speaker or microphone endpoints that Windows could select as audio
+defaults when a streamed controller connects.
+
 ## Build
 
 Start with Apollo's normal Windows x64 build prerequisites, then add Python
@@ -85,7 +89,8 @@ component. The build does not require a WDK or unsigned/test-signed drivers.
 
 `cmake --build cmake-build-edge --target dualsense-edge-tests` checks complete Edge reports,
 calibration, button mapping, motion, touch, battery, feedback decoding and the
-native ABI. It creates no virtual device and does not install drivers.
+native ABI. It also validates the SDK's HID-only USB configuration. It creates
+no virtual device and does not install drivers.
 
 With the driver installed, build `dualsense-edge-probe` and run it from the
 build directory after ending active game/stream sessions. It creates a temporary

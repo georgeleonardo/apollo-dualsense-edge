@@ -9,7 +9,7 @@ public sealed class MoonlightControllerMapper
 
     public MoonlightControllerMapper(HMProfile profile)
     {
-        if (profile.Id != "dualsense-edge-composite")
+        if (profile.Id != "dualsense-edge-usb")
             throw new ArgumentException("Expected the DualSense Edge profile.", nameof(profile));
         var sticks = profile.Sticks;
         var triggers = profile.Triggers;

@@ -72,7 +72,7 @@ public static unsafe class NativeExports
     // Caller holds Lifecycle, including while the SDK allocates an index.
     private static (HMContext, HMProfile) GetBackend()
     {
-        const string profileId = "dualsense-edge-composite";
+        const string profileId = "dualsense-edge-usb";
         if (!HMContext.IsUsbipBackendAvailable)
             throw new InvalidOperationException("Install and start the signed usbip-win2 driver before selecting DualSense Edge. See docs/dualsense-edge.md.");
         if (context == null)

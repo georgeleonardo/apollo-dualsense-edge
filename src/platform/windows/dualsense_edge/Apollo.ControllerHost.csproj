@@ -14,7 +14,7 @@
   <ItemGroup>
     <ProjectReference Include="../../../../third-party/hidmaestro/HIDMaestro.Managed.csproj" />
     <PackageDownload Include="Microsoft.NETCore.App.Host.win-x64" Version="[10.0.9]" />
-    <Content Include="Profiles/dualsense-edge-composite.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Profiles/dualsense-edge-usb.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <Target Name="CopyNativeHost" AfterTargets="Publish">
     <Copy SourceFiles="$(NuGetPackageRoot)microsoft.netcore.app.host.win-x64/10.0.9/runtimes/win-x64/native/nethost.dll"

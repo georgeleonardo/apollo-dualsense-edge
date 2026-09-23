@@ -14,7 +14,7 @@ void Check(bool condition, string name)
 
 using var catalog = new HMContext(manageDrivers: false);
 catalog.LoadProfilesFromDirectory(Path.Combine(AppContext.BaseDirectory, "Profiles"));
-var edgeProfile = catalog.GetProfile("dualsense-edge-composite") ?? throw new Exception("Edge profile missing");
+var edgeProfile = catalog.GetProfile("dualsense-edge-usb") ?? throw new Exception("Edge profile missing");
 var edgeMapper = new MoonlightControllerMapper(edgeProfile);
 Check(edgeProfile.VendorId == 0x054C && edgeProfile.ProductId == 0x0DF2,
     "Edge uses Sony's actual vendor and Edge product identity");
@@ -71,6 +71,33 @@ Check(edgeNeutral.Axes![HMAxis.X] == .5f && edgeNeutral.Axes[HMAxis.Rx] == 0,
 // Exercise the real SDK encoder and its advertised feature calibration. These
 // tests inspect complete wire reports, not a duplicate of the bridge mapper.
 var sdk = typeof(HMContext).Assembly;
+// Build the actual SDK descriptor store. Its constructor checks the structured
+// routing against the wire descriptor, including the HID report length.
+var usbType = sdk.GetType("HIDMaestro.Internal.Usbip.UsbDescriptorSet", throwOnError: true)!;
+var innerProfile = typeof(HMProfile).GetProperty("Inner", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(edgeProfile);
+var usb = Activator.CreateInstance(usbType, [innerProfile, 0, null])!;
+var configuration = (byte[])usbType.GetProperty("ConfigurationDescriptor")!.GetValue(usb)!;
+var interfaces = new List<(byte Number, byte Class)>();
+var endpoints = new List<(byte Address, byte Transfer, ushort Size, byte Interval)>();
+for (int at = 0; at < configuration.Length; at += configuration[at])
+{
+    if (configuration[at] < 2 || at + configuration[at] > configuration.Length)
+        throw new Exception("Malformed USB configuration descriptor");
+    switch (configuration[at + 1])
+    {
+        case 4:
+            interfaces.Add((configuration[at + 2], configuration[at + 5]));
+            break;
+        case 5:
+            endpoints.Add((configuration[at + 2], (byte)(configuration[at + 3] & 3),
+                BinaryPrimitives.ReadUInt16LittleEndian(configuration.AsSpan(at + 4)), configuration[at + 6]));
+            break;
+    }
+}
+Check(configuration[4] == 1 && interfaces.SequenceEqual(new (byte, byte)[] { (0, 3) }),
+    "Virtual Edge exposes only its gamepad HID interface, with no audio interfaces");
+Check(endpoints.SequenceEqual(new (byte, byte, ushort, byte)[] { (0x84, 3, 64, 4), (3, 3, 64, 6) }),
+    "HID-only USB configuration retains both native interrupt endpoints and polling intervals");
 var codec = sdk.GetType("HIDMaestro.Internal.VendorBlobCodec", throwOnError: true)!;
 var encoderState = Activator.CreateInstance(codec.GetNestedType("EncoderState")!)!;
 var encode = codec.GetMethod("EncodeInput", BindingFlags.Public | BindingFlags.Static)!;
@@ -84,7 +111,7 @@ byte[] EncodeEdge(HMGamepadState state)
     return report;
 }
 short I16(byte[] bytes, int at) => BinaryPrimitives.ReadInt16LittleEndian(bytes.AsSpan(at, 2));
-using var profileJson = JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Profiles", "dualsense-edge-composite.json")));
+using var profileJson = JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Profiles", "dualsense-edge-usb.json")));
 var calibrationReply = profileJson.RootElement.GetProperty("featureStubs").GetProperty("reports")[0];
 var calibrationBytes = Convert.FromHexString(calibrationReply.GetProperty("data").GetString()!);
 var calibration = calibrationBytes.AsSpan(1).ToArray();

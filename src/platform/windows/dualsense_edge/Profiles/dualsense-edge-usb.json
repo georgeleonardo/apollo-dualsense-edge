@@ -1,5 +1,5 @@
 {
-  "id": "dualsense-edge-composite",
+  "id": "dualsense-edge-usb",
   "name": "DualSense Edge (PS5)",
   "vendor": "Sony",
   "vid": "0x054C",
@@ -36,7 +36,7 @@
       "value": 128
     }
   ],
-  "notes": "Issue #39 follow-up: the four-interface USB composite a real DualSense Edge presents, authored from a physical Edge's full lsusb -v probe (linux-hardware.org probe EAB445BFA5, Steam Deck host; mirrored in github.com/linuxhw/LsUSB). Configuration wTotalLength 227, bNumInterfaces 4, self-powered, 500 mA, high speed. The audio topology is byte-identical to the base DualSense (4-ch 48 kHz OUT with speaker channels 1/2 and voice-coil haptics 3/4, wChannelConfig 0x0033; 2-ch 48 kHz headset microphone IN). Two dump-confirmed differences from the base pad: HID wDescriptorLength 389 (matches this profile's Edge descriptor exactly) and HID interrupt IN bInterval 4 (1 ms input polling, the Edge's 1000 Hz USB input; OUT stays 6). Interface 3 is byte-identical to 'dualsense-edge', so the Edge feature reports 0x60-0x7B and codec carry over unchanged. Residuals, named precisely: no full-speed other-speed capture exists for the Edge, so GET_DESCRIPTOR(Other_Speed) stalls while the dump-confirmed Device Qualifier is served; and audioControls carries the BASE DualSense's captured wire ranges (identical advertised controls, same audio hardware per the topology) pending an Edge control-transfer capture. Uses the USB/IP create path (backend: usbip). The transport ships inside HIDMaestro.Core.dll and deploys itself on first use, so this profile needs nothing installed by hand. 'dualsense-edge' remains the UMDF2 single-interface profile and is unaffected. Local Moonlight bridge profile: emit the complete USB report from the first frame, including calibrated motion, touch contacts, battery, and the normal-profile marker at byte 49. Keep lifted-contact defaults for the descriptor path as well. A neutral motion-calibration reply matches the full Sony gyro/accelerometer range. Native descriptors, remaining feature replies, button mappings, and USB configuration remain unchanged.",
+  "notes": "Derived from HIDMaestro 1.9.0's DualSense Edge composite profile and its physical Edge descriptor capture (linux-hardware.org probe EAB445BFA5). Apollo exposes only the gamepad HID interface, numbered zero, with the original 389-byte HID descriptor and 64-byte interrupt endpoints. Unsupported USB audio interfaces and controls are omitted so the virtual pad does not create speakers or a microphone. The complete input report is enabled from the first frame with lifted contacts, calibrated motion, battery and the normal hardware-profile marker. Feature report 0x05 matches the virtual gyro/accelerometer calibration. The signed USB/IP transport is installed separately; the component does not manage drivers.",
   "buttonMap": [
     1,
     2,
@@ -429,97 +429,6 @@
     "interfaces": [
       {
         "interfaceNumber": 0,
-        "function": "audioControl",
-        "altSettings": [
-          {
-            "altSetting": 0,
-            "interfaceClass": 1,
-            "interfaceSubClass": 1,
-            "interfaceProtocol": 0,
-            "endpoints": []
-          }
-        ]
-      },
-      {
-        "interfaceNumber": 1,
-        "function": "audioStreamingOut",
-        "altSettings": [
-          {
-            "altSetting": 0,
-            "interfaceClass": 1,
-            "interfaceSubClass": 2,
-            "interfaceProtocol": 0,
-            "endpoints": []
-          },
-          {
-            "altSetting": 1,
-            "interfaceClass": 1,
-            "interfaceSubClass": 2,
-            "interfaceProtocol": 0,
-            "endpoints": [
-              {
-                "address": 1,
-                "transferType": "isochronous",
-                "syncType": "adaptive",
-                "maxPacketSize": 392,
-                "interval": 4
-              }
-            ],
-            "audioStream": {
-              "channels": 4,
-              "bitsPerSample": 16,
-              "sampleRateHz": 48000,
-              "channelConfig": 51,
-              "channelRoles": [
-                "speakerLeft",
-                "speakerRight",
-                "hapticLeft",
-                "hapticRight"
-              ]
-            }
-          }
-        ]
-      },
-      {
-        "interfaceNumber": 2,
-        "function": "audioStreamingIn",
-        "altSettings": [
-          {
-            "altSetting": 0,
-            "interfaceClass": 1,
-            "interfaceSubClass": 2,
-            "interfaceProtocol": 0,
-            "endpoints": []
-          },
-          {
-            "altSetting": 1,
-            "interfaceClass": 1,
-            "interfaceSubClass": 2,
-            "interfaceProtocol": 0,
-            "endpoints": [
-              {
-                "address": 130,
-                "transferType": "isochronous",
-                "syncType": "asynchronous",
-                "maxPacketSize": 196,
-                "interval": 4
-              }
-            ],
-            "audioStream": {
-              "channels": 2,
-              "bitsPerSample": 16,
-              "sampleRateHz": 48000,
-              "channelConfig": 3,
-              "channelRoles": [
-                "microphone",
-                "microphone"
-              ]
-            }
-          }
-        ]
-      },
-      {
-        "interfaceNumber": 3,
         "function": "hid",
         "altSettings": [
           {
@@ -547,29 +456,7 @@
     ],
     "busSpeed": "high",
     "deviceDescriptor": "12010002000000404c05f20d000101020001",
-    "configurationDescriptor": "0902e300040100c0fa0904000000010100000a2401000149000201020c24020101010604330000000c24060201010300000000000924030301030402000c2402040204030203000000092406050401030000092403060101010500090401000001020000090401010101020000072401010101000b2402010402100180bb0009050109880104000007250100000000090402000001020000090402010101020000072401060101000b2402010202100180bb0009058205c400040000072501000000000904030002030000000921110100012285010705840340000407050303400006",
-    "audioControls": [
-      {
-        "unitId": 2,
-        "controlInterface": 0,
-        "function": "speaker",
-        "muteCur": 0,
-        "volumeMinRaw": -25600,
-        "volumeMaxRaw": 0,
-        "volumeResRaw": 256,
-        "volumeCurRaw": -25600
-      },
-      {
-        "unitId": 5,
-        "controlInterface": 0,
-        "function": "microphone",
-        "muteCur": 0,
-        "volumeMinRaw": 0,
-        "volumeMaxRaw": 12288,
-        "volumeResRaw": 122,
-        "volumeCurRaw": 3809
-      }
-    ]
+    "configurationDescriptor": "09022900010100c0fa0904000002030000000921110100012285010705840340000407050303400006"
   },
   "featureStubs": {
     "match": "reportId",
