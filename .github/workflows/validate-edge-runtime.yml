@@ -25,7 +25,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $PSNativeCommandUseErrorActionPreference = $false
-          $sourceCommit = (Get-Content -Raw candidate/source-commit.txt).Trim()
+          $sourceCommit = [IO.File]::ReadAllText((Join-Path $PWD 'candidate/source-commit.txt')).Trim()
           if ($sourceCommit -cne 'ad47300109f70f483e8acbb43f2d5415d5aa5eb1') {
             throw 'Unexpected candidate source'
           }
@@ -53,6 +53,9 @@ jobs:
             driver_count_before = $before.Count
             driver_count_after = $after.Count
           } | ConvertTo-Json | Set-Content -Encoding utf8 no-driver-evidence.json
+          # The native probe failed as expected. All assertions above passed;
+          # do not let GitHub's PowerShell wrapper propagate its exit code.
+          exit 0
       - uses: actions/upload-artifact@v4
         with:
           name: edge-missing-driver-evidence
