@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  APOLLO_SOURCE_REF: da8867b5a2f1a228d34f9afb8adac7cc9c41e779
+  APOLLO_SOURCE_REF: cb5b5870ca9171a330c175962371ad29745d39cc
   BUILD_VERSION: 0.4.7-edge-pr.1
   BRANCH: feature/windows-dualsense-edge
   CLONE_URL: https://github.com/georgeleonardo/apollo-dualsense-edge
@@ -35,7 +35,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: da8867b5a2f1a228d34f9afb8adac7cc9c41e779
+          ref: cb5b5870ca9171a330c175962371ad29745d39cc
           persist-credentials: false
       - uses: actions/setup-dotnet@v4
         if: matrix.edge == 'ON'
