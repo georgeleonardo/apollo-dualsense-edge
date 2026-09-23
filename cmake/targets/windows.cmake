@@ -6,3 +6,7 @@ list(APPEND SUNSHINE_EXTERNAL_LIBRARIES
         $<TARGET_OBJECTS:sunshine_rc_object>
         Windowsapp.lib
         Wtsapi32.lib)
+
+if(SUNSHINE_ENABLE_DUALSENSE_EDGE)
+    include(${CMAKE_MODULE_PATH}/dependencies/dualsense_edge.cmake)
+endif()

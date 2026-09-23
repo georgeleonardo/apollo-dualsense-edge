@@ -22,6 +22,10 @@
 #include "src/logging.h"
 #include "src/platform/common.h"
 
+#ifdef SUNSHINE_ENABLE_DUALSENSE_EDGE
+  #include "dualsense_edge.h"
+#endif
+
 #ifdef __MINGW32__
 // DECLARE_HANDLE(HSYNTHETICPOINTERDEVICE);
 WINUSERAPI HSYNTHETICPOINTERDEVICE WINAPI CreateSyntheticPointerDevice(POINTER_INPUT_TYPE pointerType, ULONG maxCount, POINTER_FEEDBACK_MODE mode);
@@ -447,6 +451,10 @@ namespace platf {
 
     vigem_t *vigem;
 
+#ifdef SUNSHINE_ENABLE_DUALSENSE_EDGE
+    std::unique_ptr<dualsense_edge_t> edge;
+#endif
+
     decltype(CreateSyntheticPointerDevice) *fnCreateSyntheticPointerDevice;
     decltype(InjectSyntheticPointerInput) *fnInjectSyntheticPointerInput;
     decltype(DestroySyntheticPointerDevice) *fnDestroySyntheticPointerDevice;
@@ -461,6 +469,12 @@ namespace platf {
       delete raw.vigem;
       raw.vigem = nullptr;
     }
+
+#ifdef SUNSHINE_ENABLE_DUALSENSE_EDGE
+    if (dualsense_edge_t::available()) {
+      raw.edge = std::make_unique<dualsense_edge_t>();
+    }
+#endif
 
     // Get pointers to virtual touch/pen input functions (Win10 1809+)
     raw.fnCreateSyntheticPointerDevice = (decltype(CreateSyntheticPointerDevice) *) GetProcAddress(GetModuleHandleA("user32.dll"), "CreateSyntheticPointerDevice");
@@ -1175,6 +1189,33 @@ namespace platf {
   int alloc_gamepad(input_t &input, const gamepad_id_t &id, const gamepad_arrival_t &metadata, feedback_queue_t feedback_queue) {
     auto raw = (input_raw_t *) input.get();
 
+#ifdef SUNSHINE_ENABLE_DUALSENSE_EDGE
+    if (config::input.gamepad == "dualsense-edge"sv) {
+      if (!raw->edge) {
+        BOOST_LOG(error) << "DualSense Edge component is missing; see docs/dualsense-edge.md";
+        return -1;
+      }
+      auto capabilities = metadata.capabilities;
+      if (!config::input.forward_rumble) {
+        capabilities &= ~LI_CCAP_RUMBLE;
+      }
+      // Adaptive triggers already use the standard 0x5503 feedback packet.
+      // The client decides whether its PlayStation controller supports it.
+      // There is no separate adaptive-trigger capability bit.
+      auto result = raw->edge->allocate(id.globalIndex, feedback_queue, id.clientRelativeIndex, capabilities, metadata.type == LI_CTYPE_PS);
+      if (result == 0) {
+        BOOST_LOG(info) << "Gamepad " << id.globalIndex << " will be DualSense Edge (manual selection)";
+        if (metadata.capabilities & LI_CCAP_ACCEL) {
+          feedback_queue->raise(gamepad_feedback_msg_t::make_motion_event_state(id.clientRelativeIndex, LI_MOTION_TYPE_ACCEL, 100));
+        }
+        if (metadata.capabilities & LI_CCAP_GYRO) {
+          feedback_queue->raise(gamepad_feedback_msg_t::make_motion_event_state(id.clientRelativeIndex, LI_MOTION_TYPE_GYRO, 100));
+        }
+      }
+      return result;
+    }
+#endif
+
     if (!raw->vigem) {
       return 0;
     }
@@ -1228,6 +1269,13 @@ namespace platf {
 
   void free_gamepad(input_t &input, int nr) {
     auto raw = (input_raw_t *) input.get();
+
+#ifdef SUNSHINE_ENABLE_DUALSENSE_EDGE
+    if (raw->edge && raw->edge->owns(nr)) {
+      raw->edge->free(nr);
+      return;
+    }
+#endif
 
     if (!raw->vigem) {
       return;
@@ -1487,6 +1535,13 @@ namespace platf {
    * @param gamepad_state The gamepad button/axis state sent from the client.
    */
   void gamepad_update(input_t &input, int nr, const gamepad_state_t &gamepad_state) {
+#ifdef SUNSHINE_ENABLE_DUALSENSE_EDGE
+    auto &edge = ((input_raw_t *) input.get())->edge;
+    if (edge && edge->owns(nr)) {
+      edge->update(nr, gamepad_state);
+      return;
+    }
+#endif
     auto vigem = ((input_raw_t *) input.get())->vigem;
 
     // If there is no gamepad support
@@ -1519,6 +1574,13 @@ namespace platf {
    * @param touch The touch event.
    */
   void gamepad_touch(input_t &input, const gamepad_touch_t &touch) {
+#ifdef SUNSHINE_ENABLE_DUALSENSE_EDGE
+    auto &edge = ((input_raw_t *) input.get())->edge;
+    if (edge && edge->owns(touch.id.globalIndex)) {
+      edge->touch(touch);
+      return;
+    }
+#endif
     auto vigem = ((input_raw_t *) input.get())->vigem;
 
     // If there is no gamepad support
@@ -1625,6 +1687,13 @@ namespace platf {
    * @param motion The motion event.
    */
   void gamepad_motion(input_t &input, const gamepad_motion_t &motion) {
+#ifdef SUNSHINE_ENABLE_DUALSENSE_EDGE
+    auto &edge = ((input_raw_t *) input.get())->edge;
+    if (edge && edge->owns(motion.id.globalIndex)) {
+      edge->motion(motion);
+      return;
+    }
+#endif
     auto vigem = ((input_raw_t *) input.get())->vigem;
 
     // If there is no gamepad support
@@ -1652,6 +1721,13 @@ namespace platf {
    * @param battery The battery event.
    */
   void gamepad_battery(input_t &input, const gamepad_battery_t &battery) {
+#ifdef SUNSHINE_ENABLE_DUALSENSE_EDGE
+    auto &edge = ((input_raw_t *) input.get())->edge;
+    if (edge && edge->owns(battery.id.globalIndex)) {
+      edge->battery(battery);
+      return;
+    }
+#endif
     auto vigem = ((input_raw_t *) input.get())->vigem;
 
     // If there is no gamepad support
@@ -1731,6 +1807,9 @@ namespace platf {
         supported_gamepad_t {"auto", true, ""},
         supported_gamepad_t {"x360", false, ""},
         supported_gamepad_t {"ds4", false, ""},
+#ifdef SUNSHINE_ENABLE_DUALSENSE_EDGE
+        supported_gamepad_t {"dualsense-edge", false, ""},
+#endif
       };
 
       return gps;
@@ -1744,7 +1823,10 @@ namespace platf {
     static std::vector gps {
       supported_gamepad_t {"auto", true, reason},
       supported_gamepad_t {"x360", enabled, reason},
-      supported_gamepad_t {"ds4", enabled, reason}
+      supported_gamepad_t {"ds4", enabled, reason},
+#ifdef SUNSHINE_ENABLE_DUALSENSE_EDGE
+      supported_gamepad_t {"dualsense-edge", dualsense_edge_t::available(), "DualSense Edge component is not installed"},
+#endif
     };
 
     for (auto &[name, is_enabled, reason_disabled] : gps) {

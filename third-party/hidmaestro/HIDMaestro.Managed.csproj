@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AssemblyName>HIDMaestro.Core</AssemblyName>
+    <RootNamespace>HIDMaestro</RootNamespace>
+    <Version>1.9.0-apollo.1</Version>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <EnableDefaultEmbeddedResourceItems>false</EnableDefaultEmbeddedResourceItems>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(HidMaestroSource)/sdk/HIDMaestro.Core/**/*.cs" />
+  </ItemGroup>
+  <Target Name="CheckSource" BeforeTargets="BeforeBuild">
+    <Error Condition="'$(HidMaestroSource)' == '' Or !Exists('$(HidMaestroSource)/sdk/HIDMaestro.Core/HMContext.cs')"
+           Text="Build using tools/dualsense-edge/build.py to prepare the pinned HIDMaestro source." />
+  </Target>
+</Project>

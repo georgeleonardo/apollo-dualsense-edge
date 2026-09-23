@@ -1,0 +1,13 @@
+{
+  "hidmaestro": {
+    "version": "1.9.0",
+    "commit": "942e25aa9ce4e93dc601f59a796f7432809fc41b",
+    "url": "https://codeload.github.com/hifihedgehog/HIDMaestro/tar.gz/942e25aa9ce4e93dc601f59a796f7432809fc41b",
+    "sha256": "05d2fdcb55bc6d715f6c3decfadf50761dc67249e70deaaec73668a17fd5d3d7"
+  },
+  "runtime": {
+    "version": "10.0.9",
+    "url": "https://builds.dotnet.microsoft.com/dotnet/Runtime/10.0.9/dotnet-runtime-10.0.9-win-x64.zip",
+    "sha512": "f690e9d14a93f38482cc5d3fd825efa9b422385f907587cbe3b53f5265f8a116e97a5ef0d906b8a905b5e164b20874468f461a437a9fcd9554073d36174be70f"
+  }
+}

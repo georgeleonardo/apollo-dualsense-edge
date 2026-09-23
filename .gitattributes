@@ -3,3 +3,7 @@ Dockerfile text eol=lf
 *.dockerfile text eol=lf
 *flatpak-lint-*.json text eol=lf
 *.sh text eol=lf
+## Preserve the released .NET hosting headers' CRLF bytes and their hashes.
+third-party/dotnet-host/* whitespace=cr-at-eol
+## Unified patches contain a single space on empty context lines.
+third-party/hidmaestro/*.patch whitespace=-blank-at-eol

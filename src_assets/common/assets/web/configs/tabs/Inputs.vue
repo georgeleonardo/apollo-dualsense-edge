@@ -5,7 +5,8 @@ import Checkbox from "../../Checkbox.vue";
 
 const props = defineProps([
   'platform',
-  'config'
+  'config',
+  'gamepadOptions'
 ])
 
 const config = ref(props.config)
@@ -37,10 +38,12 @@ const config = ref(props.config)
           <template #windows>
             <option value="ds4">{{ $t('config.gamepad_ds4') }}</option>
             <option value="x360">{{ $t('config.gamepad_x360') }}</option>
+            <option v-if="gamepadOptions.includes('dualsense-edge')" value="dualsense-edge">{{ $t('config.gamepad_dualsense_edge') }}</option>
           </template>
         </PlatformLayout>
       </select>
       <div class="form-text">{{ $t('config.gamepad_desc') }}</div>
+      <div v-if="config.gamepad === 'dualsense-edge'" class="form-text">{{ $t('config.gamepad_dualsense_edge_desc') }}</div>
     </div>
 
     <!-- Additional options based on gamepad type -->

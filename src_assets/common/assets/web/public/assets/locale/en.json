@@ -281,6 +281,8 @@
     "gamepad_desc": "Choose which type of gamepad to emulate on the host",
     "gamepad_ds4": "DS4 (PS4)",
     "gamepad_ds4_manual": "DS4 selection options",
+    "gamepad_dualsense_edge": "DualSense Edge (PS5)",
+    "gamepad_dualsense_edge_desc": "Preserves both rear paddles and both Fn buttons when the client sends them. Requires the signed usbip-win2 driver; see the DualSense Edge setup guide.",
     "gamepad_ds5": "DS5 (PS5)",
     "gamepad_switch": "Nintendo Pro (Switch)",
     "gamepad_manual": "Manual DS4 options",

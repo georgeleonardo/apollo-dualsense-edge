@@ -1,0 +1,50 @@
+diff --git a/sdk/HIDMaestro.Core/HMController.cs b/sdk/HIDMaestro.Core/HMController.cs
+--- a/sdk/HIDMaestro.Core/HMController.cs
++++ b/sdk/HIDMaestro.Core/HMController.cs
+@@ -26,6 +26,9 @@
+ public sealed class HMController : IDisposable
+ {
+     private readonly HMContext _context;
++    // SubmitState and the profile's idle pump share mutable encoder counters,
++    // report buffers and publication sequence. Serialize their whole update.
++    private readonly object _inputStateLock = new();
+     internal int Index { get; }
+     internal string? InstanceId { get; }
+ 
+@@ -534,6 +537,12 @@
+     /// The SDK encodes <paramref name="state"/> into the active profile's
+     /// HID report layout and publishes it via shared memory.</summary>
+     public void SubmitState(in HMGamepadState state)
++    {
++        lock (_inputStateLock)
++            SubmitStateCore(in state);
++    }
++
++    private void SubmitStateCore(in HMGamepadState state)
+     {
+         ThrowIfDisposed();
+ 
+@@ -1011,13 +1020,17 @@
+         {
+             try
+             {
+-                long quiet = Environment.TickCount64 - Interlocked.Read(ref _lastSubmitTicks);
+-                if (quiet >= intervalMs)
++                lock (_inputStateLock)
+                 {
+-                    var st = _lastSubmitted;
+-                    SubmitState(in st);
+-                    // SubmitState stamps _lastSubmitTicks, so a live
+-                    // consumer's own cadence always wins over this one.
++                    // Test for idleness after taking the same lock as a live
++                    // submission. Otherwise an idle snapshot captured before
++                    // that submission could overwrite its newer button state.
++                    long quiet = Environment.TickCount64 - Interlocked.Read(ref _lastSubmitTicks);
++                    if (quiet >= intervalMs)
++                    {
++                        var st = _lastSubmitted;
++                        SubmitStateCore(in st);
++                    }
+                 }
+             }
+             catch

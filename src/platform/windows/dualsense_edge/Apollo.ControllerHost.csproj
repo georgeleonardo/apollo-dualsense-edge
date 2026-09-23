@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <GenerateRuntimeConfigurationFiles>true</GenerateRuntimeConfigurationFiles>
+    <RuntimeFrameworkVersion>10.0.9</RuntimeFrameworkVersion>
+    <RollForward>Disable</RollForward>
+    <SelfContained>false</SelfContained>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../../third-party/hidmaestro/HIDMaestro.Managed.csproj" />
+    <PackageDownload Include="Microsoft.NETCore.App.Host.win-x64" Version="[10.0.9]" />
+    <Content Include="Profiles/dualsense-edge-composite.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <Target Name="CopyNativeHost" AfterTargets="Publish">
+    <Copy SourceFiles="$(NuGetPackageRoot)microsoft.netcore.app.host.win-x64/10.0.9/runtimes/win-x64/native/nethost.dll"
+          DestinationFiles="$(PublishDir)nethost.dll" />
+    <Copy SourceFiles="$(NuGetPackageRoot)microsoft.netcore.app.host.win-x64/10.0.9/LICENSE.TXT"
+          DestinationFiles="$(PublishDir)nethost-LICENSE.txt" />
+  </Target>
+</Project>
