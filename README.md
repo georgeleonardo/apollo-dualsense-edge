@@ -16,6 +16,9 @@ Refer to LizardByte's documentation hosted on [Read the Docs](https://docs.lizar
 
 Currently Virtual Display support is Windows only, Linux support is planned and will be implemented in the future.
 
+Windows x64 builds can optionally enable [DualSense Edge emulation](docs/dualsense-edge.md)
+to preserve rear paddles and Fn buttons in Steam Input.
+
 ## About Permission System
 
 Check out the [Wiki](https://github.com/ClassicOldSong/Apollo/wiki/Permission-System)

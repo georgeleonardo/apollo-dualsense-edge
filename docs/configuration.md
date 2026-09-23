@@ -331,10 +331,16 @@ editing the `conf` file in a text editor. Use the examples as reference.
             @endcode</td>
     </tr>
     <tr>
-        <td rowspan="6">Choices</td>
+        <td rowspan="7">Choices</td>
         <td>ds4</td>
         <td>DualShock 4 controller (PS4)
             @note{This option applies to Windows only.}</td>
+    </tr>
+    <tr>
+        <td>dualsense-edge</td>
+        <td>DualSense Edge controller, including independent rear paddles and Fn buttons.
+            @note{Requires the optional Windows x64 backend and the signed usbip-win2 driver.
+            See [DualSense Edge setup](dualsense-edge.md).}</td>
     </tr>
     <tr>
         <td>ds5</td>

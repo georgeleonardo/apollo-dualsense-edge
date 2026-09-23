@@ -76,6 +76,13 @@ set(OPENSSL_LIBRARIES
         libssl.a
         libcrypto.a)
 
+if(SUNSHINE_ENABLE_DUALSENSE_EDGE)
+    list(APPEND PLATFORM_TARGET_FILES
+            "${CMAKE_SOURCE_DIR}/src/platform/windows/dualsense_edge.cpp"
+            "${CMAKE_SOURCE_DIR}/src/platform/windows/dualsense_edge.h")
+    list(APPEND SUNSHINE_DEFINITIONS SUNSHINE_ENABLE_DUALSENSE_EDGE)
+endif()
+
 list(PREPEND PLATFORM_LIBRARIES
         ${CURL_STATIC_LIBRARIES}
         avrt

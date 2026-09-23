@@ -18,6 +18,13 @@ option(SUNSHINE_CONFIGURE_ONLY "Configure special files only, then exit." OFF)
 
 option(SUNSHINE_ENABLE_TRAY "Enable system tray icon." ON)
 
+option(SUNSHINE_ENABLE_DUALSENSE_EDGE "Build the optional Windows x64 DualSense Edge backend." OFF)
+if(SUNSHINE_ENABLE_DUALSENSE_EDGE)
+    if(NOT WIN32 OR NOT CMAKE_SIZEOF_VOID_P EQUAL 8 OR NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(AMD64|amd64|x86_64)$")
+        message(FATAL_ERROR "SUNSHINE_ENABLE_DUALSENSE_EDGE requires a Windows x64 build.")
+    endif()
+endif()
+
 option(SUNSHINE_SYSTEM_WAYLAND_PROTOCOLS "Use system installation of wayland-protocols rather than the submodule." OFF)
 
 if(APPLE)

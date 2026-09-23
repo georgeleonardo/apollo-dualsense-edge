@@ -1,0 +1,309 @@
+--- a/sdk/HIDMaestro.Core/HMContext.cs
++++ b/sdk/HIDMaestro.Core/HMContext.cs
+@@ -39,6 +39,7 @@
+     private readonly List<HMProfile> _profiles = new();
+     private readonly Dictionary<string, HMProfile> _profilesById = new(StringComparer.OrdinalIgnoreCase);
+     private bool _disposed;
++    private readonly bool _manageDrivers;
+ 
+     /// <summary>Create a new SDK context. Loading profiles and creating
+     /// controllers are separate steps; this constructor only allocates the
+@@ -53,8 +54,16 @@
+     /// in the consumer's think-time budget. Failures are silently
+     /// swallowed: if the warm-up couldn't extract for some reason, the
+     /// foreground InstallDriver path will retry it.</para></summary>
+-    public HMContext()
+-    {
++    public HMContext() : this(manageDrivers: true) { }
++
++    /// <summary>Create a context with explicit driver ownership. With
++    /// <paramref name="manageDrivers"/> false, only USB/IP profiles are
++    /// permitted, the transport must already be installed, and no driver
++    /// payload is extracted, installed, replaced or repaired.</summary>
++    public HMContext(bool manageDrivers)
++    {
++        _manageDrivers = manageDrivers;
++        if (!manageDrivers) return;
+         // T28: fan out independent prewarm tasks in parallel. The original
+         // serial sequence was: Sha256Hex → EnsureExtracted → LoadEmbedded →
+         // IsDriverInstalled → PrewarmGameInputService, taking ~150-250 ms
+@@ -138,6 +147,8 @@
+     public void InstallDriver()
+     {
+         ThrowIfDisposed();
++        if (!_manageDrivers)
++            throw new InvalidOperationException("Driver management is disabled for this context.");
+ 
+         // Proactive ghost sweep FIRST, before FullDeploy. Without this, when a
+         // prior process crashed or was force-killed (Dispose never ran), its
+@@ -385,6 +396,9 @@
+         if (profile.RequiresUsbipBackend)
+             return CreateUsbipController(index, profile, identity);
+ 
++        if (!_manageDrivers)
++            throw new InvalidOperationException("This context requires a USB/IP profile and an externally installed transport.");
++
+         // The driver INF lives next to the driver binaries in the repo's
+         // build/ directory. This will move to embedded-resource extraction
+         // when single-file SDK deployment is implemented.
+@@ -431,7 +445,7 @@
+     private HMController CreateUsbipController(int index, HMProfile profile, Internal.DeviceIdentity identity)
+     {
+         Internal.Usbip.UsbipBackendHandle handle =
+-            Internal.Usbip.UsbipBackend.CreateDevice(profile.Inner, index, identity);
++            Internal.Usbip.UsbipBackend.CreateDevice(profile.Inner, index, identity, manageDriver: _manageDrivers);
+         try
+         {
+             var controller = new HMController(this, index, profile, instanceId: null, handle, identity.Key);
+@@ -482,6 +496,9 @@
+         // other profile.
+         if (profile.RequiresUsbipBackend)
+             return CreateUsbipController(index, profile, identity);
++
++        if (!_manageDrivers)
++            throw new InvalidOperationException("This context requires a USB/IP profile and an externally installed transport.");
+ 
+         string infPath = System.IO.Path.Combine(
+             Internal.DriverBuilder.BuildDir, "hidmaestro.inf");
+@@ -635,6 +652,6 @@
+         // Run the system-wide HID orphan sweep ONCE after all per-controller
+         // teardowns complete. This avoids N concurrent system-wide HID
+         // enumerations during the parallel batch.
+-        Internal.DeviceOrchestrator.RemoveOrphanHidChildrenBatch();
++        if (_manageDrivers) Internal.DeviceOrchestrator.RemoveOrphanHidChildrenBatch();
+     }
+ }
+--- a/sdk/HIDMaestro.Core/Internal/SharedMemoryIO.cs
++++ b/sdk/HIDMaestro.Core/Internal/SharedMemoryIO.cs
+@@ -29,6 +29,26 @@
+ /// </summary>
+ internal static class SharedMemoryIO
+ {
++    // USB/IP's producer and consumer live in this process. They must not
++    // reuse the UMDF driver's global slot names: two applications can both
++    // own slot zero. The random namespace also excludes handles retained by
++    // a diagnostic process after an earlier instance has exited.
++    private static readonly string ProcessNamespace = $@"Local\HIDMaestro.{Guid.NewGuid():N}.";
++    private static readonly HashSet<int> ProcessLocalControllers = new();
++
++    internal static void UseProcessLocalObjects(int controllerIndex)
++    {
++        lock (ProcessLocalControllers) ProcessLocalControllers.Add(controllerIndex);
++    }
++
++    private static string ObjectName(string kind, int controllerIndex)
++    {
++        lock (ProcessLocalControllers)
++            return ProcessLocalControllers.Contains(controllerIndex)
++                ? $"{ProcessNamespace}{kind}{controllerIndex}"
++                : $@"Global\HIDMaestro{kind}{controllerIndex}";
++    }
++
+     // ── Layout constants: match driver/driver.h ──────────────────────────
+     //
+     // HIDMAESTRO_SHARED_INPUT (362 bytes, was 278 pre-v1.3.5):
+@@ -244,7 +264,7 @@
+             if (s_inputViews.TryGetValue(controllerIndex, out IntPtr existing))
+                 return existing;
+ 
+-            string name = $@"Global\HIDMaestroInput{controllerIndex}";
++            string name = ObjectName("Input", controllerIndex);
+             (IntPtr h, IntPtr view) = CreateSection(name, SHARED_INPUT_SIZE);
+ 
+             // Zero-init: pagefile-backed sections start zero already, but we
+@@ -259,7 +279,7 @@
+             // initially set. The driver's per-device worker thread waits on
+             // this with a 50ms safety timeout to replace the old 1ms busy poll.
+             // SDDL matches the section so WUDFHost (LocalService) can open it.
+-            string evName = $@"Global\HIDMaestroInputEvent{controllerIndex}";
++            string evName = ObjectName("InputEvent", controllerIndex);
+             IntPtr ev = CreateNamedEvent(evName);
+ 
+             // Companion input doorbell (perf audit 2026-07-21). The XUSB
+@@ -271,7 +291,7 @@
+             // an auto-reset event cannot serve two waiters) lets the
+             // companion complete a parked WAIT_FOR_INPUT at frame
+             // arrival. Old companions never open it: timer fallback.
+-            string cevName = $@"Global\HIDMaestroCompanionInputEvent{controllerIndex}";
++            string cevName = ObjectName("CompanionInputEvent", controllerIndex);
+             IntPtr cev = CreateNamedEvent(cevName);
+             s_companionInputEvents[controllerIndex] = cev;
+ 
+@@ -293,7 +313,7 @@
+     public static IntPtr TryOpenOutputEvent(int controllerIndex)
+     {
+         return OpenEventW(SYNCHRONIZE, false,
+-            $@"Global\HIDMaestroOutputEvent{controllerIndex}");
++            ObjectName("OutputEvent", controllerIndex));
+     }
+ 
+     /// <summary>Companion input doorbell handle for
+@@ -320,7 +340,7 @@
+         {
+             if (s_outputEvents.TryGetValue(controllerIndex, out IntPtr existing))
+                 return existing;
+-            IntPtr ev = CreateNamedEvent($@"Global\HIDMaestroOutputEvent{controllerIndex}");
++            IntPtr ev = CreateNamedEvent(ObjectName("OutputEvent", controllerIndex));
+             s_outputEvents[controllerIndex] = ev;
+             return ev;
+         }
+@@ -335,7 +355,7 @@
+     public static IntPtr OpenInputEventForWait(int controllerIndex)
+     {
+         return OpenEventW(SYNCHRONIZE | EVENT_MODIFY_STATE, false,
+-            $@"Global\HIDMaestroInputEvent{controllerIndex}");
++            ObjectName("InputEvent", controllerIndex));
+     }
+ 
+     /// <summary>Returns the view pointer for the controller's OUTPUT section,
+@@ -348,7 +368,7 @@
+             if (s_outputViews.TryGetValue(controllerIndex, out IntPtr existing))
+                 return existing;
+ 
+-            string name = $@"Global\HIDMaestroOutput{controllerIndex}";
++            string name = ObjectName("Output", controllerIndex);
+             (IntPtr h, IntPtr view) = CreateSection(name, SHARED_OUTPUT_SIZE);
+ 
+             // Zero-init: pagefile sections start zero, BUT a residual kernel
+@@ -383,7 +403,7 @@
+             if (s_pidStateViews.TryGetValue(controllerIndex, out IntPtr existing))
+                 return existing;
+ 
+-            string name = $@"Global\HIDMaestroPidState{controllerIndex}";
++            string name = ObjectName("PidState", controllerIndex);
+             (IntPtr h, IntPtr view) = CreateSection(name, PID_STATE_SIZE);
+ 
+             // v1.1.38: initialize with vJoy-compatible defaults rather
+@@ -728,6 +748,8 @@
+             if (s_inputEvents.TryGetValue(controllerIndex, out IntPtr ev) && ev != IntPtr.Zero)
+                 CloseHandle(ev);
+             s_inputEvents.Remove(controllerIndex);
++            if (s_companionInputEvents.Remove(controllerIndex, out IntPtr companion) && companion != IntPtr.Zero)
++                CloseHandle(companion);
+         }
+         lock (s_outputViews)
+         {
+@@ -753,6 +775,7 @@
+                 CloseHandle(h);
+             s_pidStateHandles.Remove(controllerIndex);
+         }
++        lock (ProcessLocalControllers) ProcessLocalControllers.Remove(controllerIndex);
+     }
+ 
+     /// <summary>Releases all input and output sections owned by the process.
+@@ -803,6 +826,7 @@
+                 if (h != IntPtr.Zero) CloseHandle(h);
+             s_pidStateHandles.Clear();
+         }
++        lock (ProcessLocalControllers) ProcessLocalControllers.Clear();
+     }
+ 
+     // ── private helpers ───────────────────────────────────────────────────
+--- a/sdk/HIDMaestro.Core/Internal/Usbip/UsbipBackend.cs
++++ b/sdk/HIDMaestro.Core/Internal/Usbip/UsbipBackend.cs
+@@ -28,33 +28,41 @@
+ 
+     public static UsbipBackendHandle CreateDevice(ControllerProfile profile, int index,
+                                                   DeviceIdentity? identity = null,
+-                                                  Action<string>? progress = null)
++                                                  Action<string>? progress = null,
++                                                  bool manageDriver = true)
+     {
+-        // Deploy on demand. Idempotent, and a no-op on every machine that
+-        // already has it.
+-        UsbipDriverInstaller.EnsureInstalled(progress);
++        if (manageDriver)
++            UsbipDriverInstaller.EnsureInstalled(progress);
++        else if (!IsAvailable)
++            throw new InvalidOperationException("The externally managed usbip-win2 driver is not available.");
+ 
+         var server = UsbipServer.GetOrStart();
+         SweepStaleOnce(server.Port);
+ 
+-        var device = new UsbipEmulatedDevice(profile, index, identity);
+-        server.Register(device);
++        UsbipEmulatedDevice? device = null;
+         try
+         {
++            device = new UsbipEmulatedDevice(profile, index, identity);
++            server.Register(device);
+             int vhciPort = VhciClient.Attach("127.0.0.1", server.Port, device.BusId);
+             return new UsbipBackendHandle(server, device, vhciPort);
+         }
+         catch
+         {
+-            server.Unregister(device);
+-            device.Dispose();
++            if (device != null)
++            {
++                server.Unregister(device);
++                device.Dispose();
++            }
++            SharedMemoryIO.DestroyController(index);
+             throw;
+         }
+     }
+ 
+     /// <summary>Once per process: cancel background re-attach attempts and
+     /// plug out stale imports a crashed prior session left pointing at
+-    /// this SDK's loopback port range. The vhci driver starts re-attach
++    /// the port exclusively owned by this server. Other ports may belong
++    /// to live SDK consumers and must not be swept. The vhci driver starts re-attach
+     /// attempts whenever a connection drops without a plugout
+     /// (usbip-win2 device.cpp detach path), and those would spin against
+     /// dead ports forever.</summary>
+@@ -65,14 +73,13 @@
+         {
+             foreach (var row in VhciClient.GetImportedDevices())
+             {
+-                if (!IsOurLocation(row.Host, row.Service)) continue;
+-                if (row.Service == currentPort.ToString()) continue; // this session's own
++                if (row.Host != "127.0.0.1" || row.Service != currentPort.ToString()) continue;
++                VhciClient.StopAttachAttempts(row.Host, currentPort, row.BusId);
+                 VhciClient.Detach(row.Port);
+             }
+-            for (int port = UsbipServer.BasePort; port < UsbipServer.BasePort + UsbipServer.PortRange; port++)
++            for (int devnum = 1; devnum <= 16; devnum++)
+             {
+-                for (int devnum = 1; devnum <= 8; devnum++)
+-                    VhciClient.StopAttachAttempts("127.0.0.1", port, $"1-{devnum}");
++                VhciClient.StopAttachAttempts("127.0.0.1", currentPort, $"1-{devnum}");
+             }
+         }
+         catch { /* best-effort recovery */ }
+@@ -89,11 +96,10 @@
+     /// see a composite: an SDK consumer that created one and exited left
+     /// the device enumerated behind it.</para>
+     ///
+-    /// <para>Distinct from <see cref="SweepStaleOnce"/>, which runs once per
+-    /// process at create time and deliberately SKIPS the current session's
+-    /// port so it cannot unplug the device it is about to use. Eviction
+-    /// wants the opposite, so this takes no such exclusion and is not
+-    /// gated to a single call. Best-effort: a machine without the transport
++    /// <para>Unlike <see cref="SweepStaleOnce"/>, this explicit global
++    /// eviction operation includes live devices and every SDK port. Normal
++    /// controller creation only reclaims the exclusively bound local port,
++    /// before it registers the first device. A machine without the transport
+     /// installed has nothing to detach and must not throw.</para></summary>
+     public static void DetachAllOwned()
+     {
+--- a/sdk/HIDMaestro.Core/Internal/Usbip/UsbipEmulatedDevice.cs
++++ b/sdk/HIDMaestro.Core/Internal/Usbip/UsbipEmulatedDevice.cs
+@@ -141,6 +141,7 @@
+ 
+         // Sections and events first, so both this device and the
+         // HMController constructed after it see the same objects.
++        SharedMemoryIO.UseProcessLocalObjects(index);
+         _inputView = SharedMemoryIO.EnsureInputMapping(index);
+         _outputView = SharedMemoryIO.EnsureOutputMapping(index);
+         _outputEvent = SharedMemoryIO.EnsureOutputEvent(index);
+--- a/sdk/HIDMaestro.Core/Internal/Usbip/UsbipServer.cs
++++ b/sdk/HIDMaestro.Core/Internal/Usbip/UsbipServer.cs
+@@ -65,6 +65,7 @@
+             try
+             {
+                 var l = new TcpListener(IPAddress.Loopback, BasePort + i);
++                l.Server.ExclusiveAddressUse = true;
+                 l.Start();
+                 listener = l;
+                 port = BasePort + i;

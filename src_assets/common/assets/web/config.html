@@ -47,7 +47,8 @@
       <inputs
         v-if="currentTab === 'input'"
         :config="config"
-        :platform="platform">
+        :platform="platform"
+        :gamepad-options="gamepadOptions">
       </inputs>
 
       <!-- Audio/Video Tab -->
@@ -132,6 +133,7 @@
     data() {
       return {
         platform: "",
+        gamepadOptions: [],
         saved: false,
         restarted: false,
         config: null,
@@ -335,6 +337,8 @@
         .then((r) => {
           this.config = r;
           this.platform = this.config.platform;
+          this.gamepadOptions = this.config.gamepad_options ?? [];
+          delete this.config.gamepad_options;
 
           var app = document.getElementById("app");
           if (this.platform === "windows") {

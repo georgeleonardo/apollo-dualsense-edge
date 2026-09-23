@@ -1012,6 +1012,10 @@ namespace confighttp {
     for (auto &[name, value] : vars) {
       output_tree[name] = value;
     }
+    output_tree["gamepad_options"] = nlohmann::json::array();
+    for (const auto &gamepad : platf::supported_gamepads(nullptr)) {
+      output_tree["gamepad_options"].push_back(gamepad.name);
+    }
     send_response(response, output_tree);
   }
 

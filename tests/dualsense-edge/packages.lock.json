@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net10.0-windows7.0": {
+      "apollo.controllerhost": {
+        "type": "Project",
+        "dependencies": {
+          "HIDMaestro.Core": "[1.9.0-apollo.1, )"
+        }
+      },
+      "HIDMaestro.Core": {
+        "type": "Project"
+      }
+    }
+  }
+}
